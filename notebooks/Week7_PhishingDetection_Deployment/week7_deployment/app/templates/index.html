@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phishing URL Detector</title>
+<style>
+  :root {
+    --primary: #2d3a8c;
+    --danger: #e74c3c;
+    --safe: #27ae60;
+    --warn: #f39c12;
+    --bg: #f0f2f8;
+    --card: #ffffff;
+    --border: #dde3f0;
+    --text: #2c3e50;
+    --muted: #7f8c8d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+
+  header {
+    background: linear-gradient(135deg, var(--primary) 0%, #1a237e 100%);
+    color: white; padding: 20px 40px;
+    display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  }
+  header .logo { font-size: 2rem; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header p  { font-size: 0.85rem; opacity: 0.75; margin-top: 2px; }
+
+  .metrics-bar {
+    background: var(--primary); opacity: 0.92;
+    display: flex; gap: 32px; padding: 10px 40px;
+    font-size: 0.82rem; color: #e8eaf6;
+  }
+  .metrics-bar span b { color: #90caf9; }
+
+  main { max-width: 1100px; margin: 32px auto; padding: 0 20px; display: grid; gap: 24px; }
+
+  .card {
+    background: var(--card); border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    padding: 28px 32px; border: 1px solid var(--border);
+  }
+  .card h2 { font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 18px;
+    display: flex; align-items: center; gap: 8px; }
+
+  .tab-bar { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab-btn {
+    padding: 8px 20px; border-radius: 8px; border: 1.5px solid var(--border);
+    background: white; cursor: pointer; font-size: 0.9rem; font-weight: 600;
+    color: var(--muted); transition: all 0.2s;
+  }
+  .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* URL input */
+  .url-section { display: grid; gap: 12px; }
+  .url-section textarea {
+    width: 100%; padding: 14px; border-radius: 8px; border: 1.5px solid var(--border);
+    font-size: 0.95rem; resize: vertical; min-height: 80px; font-family: monospace;
+    transition: border 0.2s;
+  }
+  .url-section textarea:focus { outline: none; border-color: var(--primary); }
+
+  /* Feature grid */
+  .feature-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;
+    max-height: 420px; overflow-y: auto; padding-right: 4px;
+  }
+  .feature-item { display: flex; flex-direction: column; gap: 4px; }
+  .feature-item label { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+  .feature-item input {
+    padding: 7px 10px; border-radius: 6px; border: 1.5px solid var(--border);
+    font-size: 0.88rem; transition: border 0.2s;
+  }
+  .feature-item input:focus { outline: none; border-color: var(--primary); }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .btn {
+    padding: 11px 26px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 0.93rem; font-weight: 700; transition: all 0.2s; letter-spacing: 0.3px;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: #1a237e; transform: translateY(-1px); }
+  .btn-secondary { background: #ecf0f1; color: var(--text); }
+  .btn-secondary:hover { background: #dde3f0; }
+  .btn-warn { background: var(--warn); color: white; }
+  .btn-warn:hover { background: #d68910; }
+
+  /* Result panel */
+  #result-panel { display: none; }
+  .result-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 24px; border-radius: 10px; font-size: 1.15rem; font-weight: 800;
+    margin-bottom: 16px; letter-spacing: 0.5px;
+  }
+  .badge-phishing { background: #fdecea; color: var(--danger); border: 2px solid var(--danger); }
+  .badge-legitimate { background: #e8f8f0; color: var(--safe); border: 2px solid var(--safe); }
+
+  .confidence-bar-wrap { margin: 16px 0; }
+  .confidence-bar-wrap label { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+  .bar-track { height: 12px; background: #ecf0f1; border-radius: 6px; margin-top: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 6px; transition: width 0.6s ease; }
+
+  .risk-chip {
+    display: inline-block; padding: 4px 14px; border-radius: 20px;
+    font-size: 0.8rem; font-weight: 700; letter-spacing: 0.5px; margin-left: 12px;
+  }
+  .risk-HIGH   { background: #fdecea; color: var(--danger); }
+  .risk-MEDIUM { background: #fef9e7; color: var(--warn); }
+  .risk-LOW    { background: #e8f8f0; color: var(--safe); }
+
+  #explain-plot { margin-top: 16px; }
+  #explain-plot img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); }
+
+  .top-features { margin-top: 16px; }
+  .top-features table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .top-features th { text-align: left; padding: 8px 12px; background: var(--bg);
+    font-weight: 700; color: var(--primary); border-bottom: 2px solid var(--border); }
+  .top-features td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .top-features tr:hover td { background: var(--bg); }
+  .feat-bar { height: 8px; background: var(--primary); border-radius: 4px; opacity: 0.7; }
+
+  .spinner { display:none; width:20px; height:20px; border:3px solid rgba(255,255,255,0.4);
+    border-top-color:white; border-radius:50%; animation:spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 24px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🛡️</div>
+  <div>
+    <h1>Phishing URL Detector</h1>
+    <p>Week 7 Deployment — Code B Data Science Internship</p>
+  </div>
+</header>
+
+<div class="metrics-bar">
+  <span>Model: <b>{{ model_name }}</b></span>
+  {% if model_metrics %}
+    {% for k, v in model_metrics.items() %}
+    <span>{{ k }}: <b>{{ "%.4f"|format(v) }}</b></span>
+    {% endfor %}
+  {% endif %}
+</div>
+
+<main>
+
+  <!-- Input Card -->
+  <div class="card">
+    <h2>🔍 Analyse a URL</h2>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('manual')">Manual Features</button>
+      <button class="tab-btn" onclick="switchTab('sample')">Sample Inputs</button>
+    </div>
+
+    <!-- Manual tab -->
+    <div id="tab-manual" class="tab-content active">
+      <div class="feature-grid" id="feature-grid">
+        {% for f in feature_names %}
+        <div class="feature-item">
+          <label title="{{ f }}">{{ f }}</label>
+          <input type="number" step="any" id="feat_{{ f }}" name="{{ f }}" value="0">
+        </div>
+        {% endfor %}
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="runPredict()">
+          <span id="spin-pred" class="spinner"></span> Predict
+        </button>
+        <button class="btn btn-warn" onclick="runExplain()">
+          <span id="spin-exp" class="spinner"></span> Explain
+        </button>
+        <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
+      </div>
+    </div>
+
+    <!-- Sample tab -->
+    <div id="tab-sample" class="tab-content">
+      <p style="color:var(--muted);font-size:0.9rem;margin-bottom:16px;">
+        Load a pre-built sample to test the model instantly.
+      </p>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="loadSample('phishing')">🎣 Load Phishing Sample</button>
+        <button class="btn btn-secondary" onclick="loadSample('legitimate')">✅ Load Legitimate Sample</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn btn-primary" onclick="runPredict()">Predict</button>
+        <button class="btn btn-warn" onclick="runExplain()">Explain</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result Card -->
+  <div class="card" id="result-panel">
+    <h2>📊 Prediction Result</h2>
+    <div id="result-badge"></div>
+    <div class="confidence-bar-wrap">
+      <label>Phishing Probability</label>
+      <div class="bar-track"><div class="bar-fill" id="conf-bar" style="width:0%"></div></div>
+      <small id="conf-label" style="color:var(--muted)"></small>
+    </div>
+    <div id="explain-section" style="display:none">
+      <h2 style="margin-top:24px;">🔬 Feature Explanation</h2>
+      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:10px;" id="explain-note"></p>
+      <div id="explain-plot"></div>
+      <div class="top-features" id="top-features-table"></div>
+    </div>
+  </div>
+
+</main>
+
+<footer>Phishing Detection System · Week 7 Deployment · Built with Flask + scikit-learn + SHAP</footer>
+
+<script>
+// ── Tab switching ───────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ── Feature names ───────────────────────────────────────────────────────────
+const FEATURES = {{ feature_names | tojson }};
+
+// ── Sample data ─────────────────────────────────────────────────────────────
+const SAMPLES = {
+  phishing: {
+    length_url:87, length_hostname:28, nb_dots:5, nb_hyphens:3, nb_at:1, nb_qm:2,
+    nb_and:3, nb_or:0, nb_eq:4, nb_underscore:2, nb_tilde:0, nb_percent:5,
+    nb_slash:8, nb_star:0, nb_colon:3, nb_comma:0, nb_semicolumn:1, nb_dollar:0,
+    nb_space:0, nb_www:1, nb_com:2, nb_dslash:1, http_in_path:1, https_token:0,
+    ratio_digits_url:0.21, ratio_digits_host:0.07, punycode:1, port:1,
+    tld_in_path:1, tld_in_subdomain:1, abnormal_subdomain:1, nb_subdomains:3,
+    prefix_suffix:1, shortening_service:1, path_extension:1, nb_redirection:3,
+    nb_external_redirection:2, length_words_raw:12, char_repeat:4,
+    shortest_words_raw:2, shortest_word_host:3, shortest_word_path:2,
+    longest_words_raw:18, longest_word_host:12, longest_word_path:15,
+    avg_words_raw:7.2, avg_word_host:5.1, avg_word_path:6.4, phish_hints:4,
+    domain_in_brand:0, brand_in_subdomain:1, brand_in_path:1, suspecious_tld:1,
+    statistical_report:1, nb_hyperlinks:45, ratio_intHyperlinks:0.2,
+    ratio_extHyperlinks:0.7, ratio_nullHyperlinks:0.1, nb_extCSS:8,
+    ratio_intRedirection:0.1, ratio_extRedirection:0.8, ratio_intErrors:0.3,
+    ratio_extErrors:0.5, login_form:1, external_favicon:1, links_in_tags:0.8,
+    submit_email:1, ratio_intMedia:0.1, ratio_extMedia:0.9, sfh:1, iframe:1,
+    popup_window:1, safe_anchor:0.1, onmouseover:1, right_clic:1, empty_title:1,
+    domain_in_title:0, domain_with_copyright:0, whois_registered_domain:0,
+    domain_registration_length:30, domain_age:15, web_traffic:9999999, dns_record:0,
+    google_index:0, page_rank:0
+  },
+  legitimate: {
+    length_url:32, length_hostname:12, nb_dots:2, nb_hyphens:0, nb_at:0, nb_qm:0,
+    nb_and:0, nb_or:0, nb_eq:0, nb_underscore:0, nb_tilde:0, nb_percent:0,
+    nb_slash:3, nb_star:0, nb_colon:1, nb_comma:0, nb_semicolumn:0, nb_dollar:0,
+    nb_space:0, nb_www:1, nb_com:1, nb_dslash:1, http_in_path:0, https_token:1,
+    ratio_digits_url:0.03, ratio_digits_host:0.0, punycode:0, port:0,
+    tld_in_path:0, tld_in_subdomain:0, abnormal_subdomain:0, nb_subdomains:1,
+    prefix_suffix:0, shortening_service:0, path_extension:0, nb_redirection:0,
+    nb_external_redirection:0, length_words_raw:5, char_repeat:0,
+    shortest_words_raw:4, shortest_word_host:6, shortest_word_path:5,
+    longest_words_raw:10, longest_word_host:8, longest_word_path:10,
+    avg_words_raw:6.5, avg_word_host:7.0, avg_word_path:8.0, phish_hints:0,
+    domain_in_brand:1, brand_in_subdomain:0, brand_in_path:0, suspecious_tld:0,
+    statistical_report:0, nb_hyperlinks:20, ratio_intHyperlinks:0.85,
+    ratio_extHyperlinks:0.1, ratio_nullHyperlinks:0.05, nb_extCSS:1,
+    ratio_intRedirection:0.9, ratio_extRedirection:0.05, ratio_intErrors:0.02,
+    ratio_extErrors:0.02, login_form:0, external_favicon:0, links_in_tags:0.1,
+    submit_email:0, ratio_intMedia:0.95, ratio_extMedia:0.05, sfh:0, iframe:0,
+    popup_window:0, safe_anchor:0.95, onmouseover:0, right_clic:0, empty_title:0,
+    domain_in_title:1, domain_with_copyright:1, whois_registered_domain:1,
+    domain_registration_length:3650, domain_age:2190, web_traffic:5000, dns_record:1,
+    google_index:1, page_rank:7
+  }
+};
+
+function loadSample(type) {
+  const s = SAMPLES[type];
+  FEATURES.forEach(f => {
+    const el = document.getElementById('feat_' + f);
+    if (el && s[f] !== undefined) el.value = s[f];
+  });
+}
+
+// ── Collect form data ────────────────────────────────────────────────────────
+function collectData() {
+  const d = {};
+  FEATURES.forEach(f => {
+    const el = document.getElementById('feat_' + f);
+    d[f] = el ? parseFloat(el.value) || 0 : 0;
+  });
+  return d;
+}
+
+// ── Predict ──────────────────────────────────────────────────────────────────
+async function runPredict() {
+  const btn = event.target;
+  const spin = document.getElementById('spin-pred');
+  btn.disabled = true; spin.style.display = 'inline-block';
+
+  try {
+    const res  = await fetch('/predict', { method:'POST', headers:{'Content-Type':'application/json'},
+                              body: JSON.stringify(collectData()) });
+    const data = await res.json();
+    showResult(data);
+  } catch(e) { alert('Prediction failed: ' + e.message); }
+
+  btn.disabled = false; spin.style.display = 'none';
+}
+
+// ── Explain ──────────────────────────────────────────────────────────────────
+async function runExplain() {
+  const btn = event.target;
+  const spin = document.getElementById('spin-exp');
+  btn.disabled = true; spin.style.display = 'inline-block';
+
+  try {
+    // First predict
+    const pr = await fetch('/predict', { method:'POST', headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify(collectData()) });
+    showResult(await pr.json());
+
+    // Then explain
+    const er = await fetch('/explain', { method:'POST', headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify(collectData()) });
+    const exp = await er.json();
+    showExplanation(exp);
+  } catch(e) { alert('Explanation failed: ' + e.message); }
+
+  btn.disabled = false; spin.style.display = 'none';
+}
+
+// ── Display helpers ──────────────────────────────────────────────────────────
+function showResult(data) {
+  const panel = document.getElementById('result-panel');
+  const badge = document.getElementById('result-badge');
+  const bar   = document.getElementById('conf-bar');
+  const lbl   = document.getElementById('conf-label');
+
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth' });
+
+  const isPhishing = data.prediction === 'phishing';
+  const conf = data.confidence ? (data.confidence * 100).toFixed(1) : '—';
+  const risk = data.risk_level || 'LOW';
+
+  badge.innerHTML = `
+    <div class="result-badge ${isPhishing ? 'badge-phishing' : 'badge-legitimate'}">
+      ${isPhishing ? '🎣 PHISHING DETECTED' : '✅ LEGITIMATE URL'}
+      <span class="risk-chip risk-${risk}">${risk} RISK</span>
+    </div>`;
+
+  const pct = data.confidence ? data.confidence * 100 : 0;
+  bar.style.width = pct + '%';
+  bar.style.background = pct > 75 ? '#e74c3c' : pct > 50 ? '#f39c12' : '#27ae60';
+  lbl.textContent = `Phishing probability: ${conf}%  ·  Threshold: ${(data.threshold_used*100).toFixed(0)}%`;
+}
+
+function showExplanation(exp) {
+  const sec = document.getElementById('explain-section');
+  sec.style.display = 'block';
+  document.getElementById('explain-note').textContent = exp.explanation || '';
+
+  if (exp.shap_plot_base64) {
+    document.getElementById('explain-plot').innerHTML =
+      `<img src="data:image/png;base64,${exp.shap_plot_base64}" alt="SHAP plot">`;
+  }
+
+  if (exp.top_features && exp.top_features.length) {
+    const maxImp = Math.max(...exp.top_features.map(f => f.importance));
+    const rows = exp.top_features.map((f, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td><b>${f.feature}</b></td>
+        <td>${f.importance.toFixed(5)}</td>
+        <td><div class="feat-bar" style="width:${(f.importance/maxImp*120).toFixed(0)}px"></div></td>
+      </tr>`).join('');
+    document.getElementById('top-features-table').innerHTML = `
+      <table>
+        <thead><tr><th>#</th><th>Feature</th><th>Importance</th><th>Bar</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+}
+
+function resetForm() {
+  FEATURES.forEach(f => {
+    const el = document.getElementById('feat_' + f);
+    if (el) el.value = 0;
+  });
+  document.getElementById('result-panel').style.display = 'none';
+}
+</script>
+</body>
+</html>
